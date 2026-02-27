@@ -44,10 +44,13 @@
         '';
 
         # Isolate mix/hex state per project to avoid cross-contamination.
+        # MIX_BUILD_ROOT per platform avoids recompilation when source is
+        # shared across architectures (e.g. virtiofs between macOS and VM).
         elixirMixHook = ''
           export MIX_HOME=$PWD/.nix-mix
           export MIX_REBAR3=${beamPkgs.rebar3}/bin/rebar3
           export HEX_HOME=$PWD/.nix-hex
+          export MIX_BUILD_ROOT=$PWD/_build-${system}
           export PATH=$MIX_HOME/bin:$HEX_HOME/bin:$PATH
         '';
 

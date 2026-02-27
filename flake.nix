@@ -116,11 +116,11 @@
               mix deps.get --only prod
               mix deps.compile
               mix compile
-              mix release body --overwrite
+              mix release glue --overwrite
 
               # Atomic deploy: copy to staging, then swap
               rm -rf /opt/body-staging
-              cp -r _build-aarch64-linux/prod/rel/body /opt/body-staging
+              cp -r _build-aarch64-linux/prod/rel/glue /opt/body-staging
               if [ -d /opt/body ]; then
                 rm -rf /opt/body-old
                 mv /opt/body /opt/body-old
@@ -141,7 +141,7 @@
               COLD
             else
               echo "Hot reload: signaling body to upgrade..."
-              $SSH "reed@$VM_IP" /opt/body/bin/body rpc \
+              $SSH "reed@$VM_IP" /opt/body/bin/glue rpc \
                 "IO.puts(\"Hot reload not yet implemented — restart manually\")"
             fi
 

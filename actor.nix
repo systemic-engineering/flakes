@@ -1,19 +1,19 @@
 # Reusable NixOS module for provisioning glue actors.
 #
 # Each actor gets: user account, SSH keys (CA-signed), git config with
-# SSH commit signing, local bare repo, and identity scaffold (CLAUDE.md).
+# SSH commit signing, local bare repo, identity scaffold, and sops
+# secret declarations (auto-generated from naming convention).
 #
 # Usage:
 #   services.actors.keel = {
 #     uid   = 1002;
 #     email = "keel@systemic.engineering";
 #     role  = "QA engineer";
-#     sshKeys = {
-#       privateKey = config.sops.secrets.keel_ssh_private_key.path;
-#       cert       = config.sops.secrets.keel_ssh_cert.path;
-#       publicKey  = config.sops.secrets.keel_ssh_public_key.path;
-#     };
+#     publicKey = "ssh-ed25519 AAAA...";
 #   };
+#
+# The module auto-declares sops.secrets.{name}_ssh_{private_key,cert,public_key}
+# and wires them into the setup service. Just add the keys to your sops file.
 
 { config, pkgs, lib, ... }:
 
@@ -70,23 +70,6 @@ let
         description = "Who signed this actor's SSH certificate.";
       };
 
-      sshKeys = {
-        privateKey = lib.mkOption {
-          type = lib.types.path;
-          description = "Path to decrypted SSH private key.";
-        };
-
-        cert = lib.mkOption {
-          type = lib.types.path;
-          description = "Path to decrypted SSH certificate.";
-        };
-
-        publicKey = lib.mkOption {
-          type = lib.types.path;
-          description = "Path to decrypted SSH public key.";
-        };
-      };
-
       extraRules = lib.mkOption {
         type = lib.types.lines;
         default = "";
@@ -124,6 +107,9 @@ let
     - SSH key signed by ${actor.trustedBy}'s CA key
   '';
 
+  # Sops secret paths follow the convention: {name}_ssh_{private_key,cert,public_key}
+  sopsPath = name: key: config.sops.secrets."${name}_ssh_${key}".path;
+
   mkSetupService = name: actor: let
     identity = mkIdentity name actor;
     memory   = mkMemory name actor;
@@ -140,9 +126,9 @@ let
       User            = "root";
 
       LoadCredential = [
-        "ssh_private_key:${actor.sshKeys.privateKey}"
-        "ssh_cert:${actor.sshKeys.cert}"
-        "ssh_public_key:${actor.sshKeys.publicKey}"
+        "ssh_private_key:${sopsPath name "private_key"}"
+        "ssh_cert:${sopsPath name "cert"}"
+        "ssh_public_key:${sopsPath name "public_key"}"
       ];
     };
 
@@ -223,6 +209,14 @@ in {
   };
 
   config = lib.mkIf (cfg != {}) {
+
+    # ── Sops secrets ─────────────────────────────────────────────
+    # Auto-declared from naming convention: {name}_ssh_{private_key,cert,public_key}
+    sops.secrets = lib.listToAttrs (lib.concatMap (name: [
+      { name = "${name}_ssh_private_key"; value = { owner = name; mode = "0400"; }; }
+      { name = "${name}_ssh_cert";        value = { owner = name; mode = "0444"; }; }
+      { name = "${name}_ssh_public_key";  value = { owner = name; mode = "0444"; }; }
+    ]) (lib.attrNames cfg));
 
     # ── Users ──────────────────────────────────────────────────
     users.users = lib.mapAttrs (name: actor: {

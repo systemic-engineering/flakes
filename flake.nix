@@ -56,7 +56,7 @@
 
         # ── Deploy script ────────────────────────────────────────────────────
         # Builds body release on the VM (source available via virtiofs),
-        # copies to /opt/body, and restarts via Nomad.
+        # copies to /opt/body, and restarts via systemd.
         #
         # Usage: nix run .#deploy-body [-- --strategy hot|cold]
         # Called by OBC pipeline's BEAM.Reload cascade.
@@ -132,13 +132,8 @@
 
             # ── Reload ───────────────────────────────────────────────────
             if [[ "$STRATEGY" == "cold" ]]; then
-              echo "Cold reload: restarting body via Nomad..."
-              $SSH "reed@$VM_IP" bash -l << 'COLD'
-                export NOMAD_ADDR=http://127.0.0.1:4646
-                nomad job stop body 2>/dev/null || true
-                sleep 1
-                nomad job run /home/reed/nomad/jobs/body.nomad.hcl
-              COLD
+              echo "Cold reload: restarting body via systemd..."
+              $SSH "root@$VM_IP" systemctl restart body
             else
               echo "Hot reload: signaling body to upgrade..."
               $SSH "reed@$VM_IP" /opt/body/bin/glue rpc \

@@ -6,10 +6,11 @@
 #
 # Usage:
 #   services.actors.keel = {
-#     uid   = 1002;
-#     email = "keel@systemic.engineering";
-#     role  = "QA engineer";
+#     uid      = 1002;
+#     email    = "keel@systemic.engineering";
+#     role     = "QA engineer";
 #     publicKey = "ssh-ed25519 AAAA...";
+#     projects = [ "glue" ];   # scoped bindfs mount of /Users/alexwolf/dev/projects/glue
 #   };
 #
 # The module auto-declares sops.secrets.{name}_ssh_{private_key,cert,public_key}
@@ -19,6 +20,13 @@
 
 let
   cfg = config.services.actors;
+
+  # macOS UID/GID constants for bindfs mapping.
+  # Projects live at /Users/alexwolf/dev/projects/ on macOS (UID 501, GID 20 staff).
+  # virtiofs exposes them at /run/dev-raw/projects/ in the VM.
+  macAlexUid  = "501";
+  macStaffGid = "20";
+  linuxUsersGid = "100";  # NixOS 'users' group
 
   capitalize = s:
     let
@@ -68,6 +76,12 @@ let
         type = lib.types.str;
         default = "Reed";
         description = "Who signed this actor's SSH certificate.";
+      };
+
+      projects = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        description = "Project directories under /Users/alexwolf/dev/projects/ to mount via bindfs.";
       };
 
       extraRules = lib.mkOption {
@@ -229,9 +243,36 @@ in {
     }) cfg;
 
     # ── Directories ────────────────────────────────────────────
-    systemd.tmpfiles.rules = lib.concatMap (name: [
+    systemd.tmpfiles.rules = lib.concatMap (name: let
+      actor = cfg.${name};
+    in [
       "d /home/${name}/.ssh 0700 ${name} users -"
-    ]) (lib.attrNames cfg);
+    ] ++ lib.optional (actor.projects != [])
+      "d /home/${name}/projects 0755 ${name} users -"
+    ) (lib.attrNames cfg);
+
+    # ── Project mounts ────────────────────────────────────────
+    # Per-actor bindfs: only authorized projects are visible.
+    # Source: virtiofs raw mount at /run/dev-raw/projects/<project>
+    # Target: /home/<actor>/projects/<project>
+    # UID map: macOS alexwolf (501) → actor UID, staff (20) → users (100)
+    # nofail: virtiofs absent on Hetzner — mounts silently skipped.
+    fileSystems = lib.listToAttrs (lib.concatMap (name: let
+      actor = cfg.${name};
+      uidMap = "${macAlexUid}/${toString actor.uid}:@${macStaffGid}/@${linuxUsersGid}";
+    in map (project: {
+      name = "/home/${name}/projects/${project}";
+      value = {
+        device  = "/run/dev-raw/projects/${project}";
+        fsType  = "fuse.bindfs";
+        options = [
+          "nofail"
+          "map=${uidMap}"
+          "x-systemd.requires-mounts-for=/run/dev-raw"
+        ];
+        noCheck = true;
+      };
+    }) actor.projects) (lib.attrNames cfg));
 
     # ── Setup services ─────────────────────────────────────────
     systemd.services = lib.mapAttrs' (name: actor:

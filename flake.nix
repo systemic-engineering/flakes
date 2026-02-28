@@ -7,6 +7,10 @@
   };
 
   outputs = { self, nixpkgs, flake-utils }:
+    {
+      # System-independent outputs
+      nixosModules.actor = import ./actor.nix;
+    } //
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};

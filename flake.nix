@@ -10,6 +10,7 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        beam = import ./beam.nix { inherit pkgs system; };
 
         # ── Base tools ───────────────────────────────────────────────────────
         baseTools = [
@@ -21,37 +22,8 @@
           pkgs.dhall-json
         ];
 
-        # ── BEAM / Elixir ────────────────────────────────────────────────────
-        beamPkgs = pkgs.beam.packages.erlang_27;
-        elixir   = beamPkgs.elixir_1_18;
-
-        elixirTools = [
-          elixir
-          pkgs.erlang_27
-          beamPkgs.rebar3
-        ];
-
-        # ── Gleam ────────────────────────────────────────────────────────────
-        gleamTools = [
-          pkgs.gleam
-          pkgs.erlang_27
-          beamPkgs.rebar3
-        ];
-
-        # ── Shell hooks ──────────────────────────────────────────────────────
         baseShellHook = ''
           export LANG=en_US.UTF-8
-        '';
-
-        # Isolate mix/hex state per project to avoid cross-contamination.
-        # MIX_BUILD_ROOT per platform avoids recompilation when source is
-        # shared across architectures (e.g. virtiofs between macOS and VM).
-        elixirMixHook = ''
-          export MIX_HOME=$PWD/.nix-mix
-          export MIX_REBAR3=${beamPkgs.rebar3}/bin/rebar3
-          export HEX_HOME=$PWD/.nix-hex
-          export MIX_BUILD_ROOT=$PWD/_build-${system}
-          export PATH=$MIX_HOME/bin:$HEX_HOME/bin:$PATH
         '';
 
         # ── Deploy script ────────────────────────────────────────────────────
@@ -145,6 +117,9 @@
         };
 
       in {
+        # Export beam.nix for consumption by project flakes
+        lib.beam = beam;
+
         devShells = {
           # Minimal: git, just, jq, dhall.
           default = pkgs.mkShell {
@@ -154,20 +129,20 @@
 
           # Elixir 1.18 / OTP 27 + base tools.
           elixir = pkgs.mkShell {
-            buildInputs = baseTools ++ elixirTools;
-            shellHook   = baseShellHook + elixirMixHook;
+            buildInputs = baseTools ++ beam.elixirTools;
+            shellHook   = baseShellHook + beam.elixirHook;
           };
 
           # Gleam + OTP 27 + base tools.
           gleam = pkgs.mkShell {
-            buildInputs = baseTools ++ gleamTools;
-            shellHook   = baseShellHook;
+            buildInputs = baseTools ++ beam.gleamTools;
+            shellHook   = baseShellHook + beam.gleamHook;
           };
 
           # Full BEAM: Elixir + Gleam + base tools.
           beam = pkgs.mkShell {
-            buildInputs = baseTools ++ elixirTools ++ gleamTools;
-            shellHook   = baseShellHook + elixirMixHook;
+            buildInputs = baseTools ++ beam.elixirTools ++ beam.gleamTools;
+            shellHook   = baseShellHook + beam.beamHook;
           };
         };
 

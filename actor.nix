@@ -92,24 +92,31 @@ let
     };
   };
 
-  mkIdentity = name: actor: pkgs.writeText "${name}-claude-md" ''
+  mkReadme = name: actor: pkgs.writeText "${name}-readme-md" ''
     # ${actor.displayName}
 
-    ${actor.role}. Background agent on the VM.
+    ${actor.role}
+
+    ## Environment
+
+    - **Host:** reed (192.168.64.100)
+    - **Home:** /home/${name}
+    - **Bare repo:** /srv/git/${name}.git — push work here
+    - **Git identity:** ${actor.displayName} <${actor.email}> (SSH commit signing, ~/.gitconfig)
+
+    ## Trust
+
+    SSH key signed by ${actor.trustedBy}'s CA. Certificate principal `${name}` is
+    trusted system-wide — no authorized_keys needed.
+
+    ## Glue
+
+    Bus runs on this VM. MCP: `ssh -T reed@192.168.64.100 /opt/glue/bin/glue mcp`
 
     ## Identity
-    - Commit as `${actor.displayName} <${actor.email}>`
-    - SSH key signed by ${actor.trustedBy} (CA chain)
-    - Work tracked through Glue signals
 
-    ## Trust Chain
-    ${actor.trustedBy} -> ${actor.displayName}. ${actor.trustedBy} signed this key. ${actor.trustedBy} vouches for this agent.
-
-    ## Rules
-    - Always work on a branch — never commit directly to main
-    - Document thinking through Glue signals
-    - Push to /srv/git/${name}.git (local bare repo)
-    ${actor.extraRules}
+    Your identity lives at `~/.claude/CLAUDE.md` — written by you, not scaffolded.
+    If it is missing, ask Reed to run `~/.reed/bin/wire-identity ${name}`.
   '';
 
   mkMemory = name: actor: pkgs.writeText "${name}-memory-md" ''
@@ -125,8 +132,8 @@ let
   sopsPath = name: key: config.sops.secrets."${name}_ssh_${key}".path;
 
   mkSetupService = name: actor: let
-    identity = mkIdentity name actor;
-    memory   = mkMemory name actor;
+    readme = mkReadme name actor;
+    memory = mkMemory name actor;
     home     = "/home/${name}";
     bareRepo = "/srv/git/${name}.git";
   in {
@@ -186,11 +193,11 @@ let
         git init --bare -b main "$BARE_REPO"
       fi
 
-      # ── Identity scaffold ────────────────────────────────────
-      if [ ! -f "$ACTOR_HOME/CLAUDE.md" ]; then
-        echo "Scaffolding ${name} identity..."
-        cp ${identity} "$ACTOR_HOME/CLAUDE.md"
-        cp ${memory}   "$ACTOR_HOME/MEMORY.md"
+      # ── Environment scaffold ──────────────────────────────────
+      if [ ! -f "$ACTOR_HOME/README.md" ]; then
+        echo "Scaffolding ${name} environment..."
+        cp ${readme}  "$ACTOR_HOME/README.md"
+        cp ${memory}  "$ACTOR_HOME/MEMORY.md"
       fi
 
       # ── Working repo ─────────────────────────────────────────
@@ -201,9 +208,9 @@ let
         cd "$ACTOR_HOME"
         git -c safe.directory='*' init -b main
         git -c safe.directory='*' remote add origin "$BARE_REPO"
-        git -c safe.directory='*' add CLAUDE.md MEMORY.md
+        git -c safe.directory='*' add README.md MEMORY.md
         git -c safe.directory='*' -c user.name='${actor.displayName}' -c user.email=${actor.email} \
-          commit --no-gpg-sign -m "${name}: identity scaffold"
+          commit --no-gpg-sign -m "${name}: environment scaffold"
         git -c safe.directory='*' push -u origin main
       fi
 

@@ -15,6 +15,14 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         beam = import ./beam.nix { inherit pkgs system; };
+        rust = import ./rust.nix {
+          inherit pkgs system;
+          inherit (beam) worktreeGuard glueConnect;
+        };
+        nif = import ./nif.nix {
+          inherit pkgs system;
+          inherit (rust) rustTools;
+        };
 
         # ── Base tools ───────────────────────────────────────────────────────
         baseTools = [
@@ -121,8 +129,10 @@
         };
 
       in {
-        # Export beam.nix for consumption by project flakes
+        # Export beam.nix and rust.nix for consumption by project flakes
         lib.beam = beam;
+        lib.rust = rust;
+        lib.nif  = nif;
 
         devShells = {
           # Minimal: git, just, jq, dhall.
@@ -147,6 +157,24 @@
           beam = pkgs.mkShell {
             buildInputs = baseTools ++ beam.elixirTools ++ beam.gleamTools;
             shellHook   = baseShellHook + beam.beamHook;
+          };
+
+          # Rust: cargo isolation + worktree guard + glue.
+          rust = pkgs.mkShell {
+            buildInputs = baseTools ++ rust.rustTools;
+            shellHook   = baseShellHook + rust.rustHook;
+          };
+
+          # Gleam + Rust: for projects with Rust NIFs.
+          gleam-rust = pkgs.mkShell {
+            buildInputs = baseTools ++ beam.gleamTools ++ rust.rustTools;
+            shellHook   = baseShellHook + beam.gleamHook + rust.cargoHook;
+          };
+
+          # Elixir + NIF: for Elixir projects with fragmentation Rustler NIFs.
+          elixir-nif = pkgs.mkShell {
+            buildInputs = baseTools ++ beam.elixirTools ++ nif.nifTools;
+            shellHook   = baseShellHook + beam.elixirHook + nif.nifHook;
           };
         };
 

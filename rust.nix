@@ -18,6 +18,9 @@ let
     pkgs.rustfmt
     pkgs.rust-analyzer
     pkgs.pkg-config
+    # Coverage — required for `just coverage` (--fail-under-lines 100)
+    pkgs.cargo-llvm-cov
+    pkgs.llvmPackages.llvm
   ];
 
   # ── Shell hook ─────────────────────────────────────────────────────────────
@@ -25,6 +28,8 @@ let
   cargoHook = ''
     export CARGO_HOME=$PWD/.nix-cargo
     export PATH=$CARGO_HOME/bin:$PATH
+    export LLVM_COV=${pkgs.llvmPackages.llvm}/bin/llvm-cov
+    export LLVM_PROFDATA=${pkgs.llvmPackages.llvm}/bin/llvm-profdata
   '';
 
 in {

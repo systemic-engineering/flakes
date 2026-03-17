@@ -23,6 +23,10 @@
           inherit pkgs system;
           inherit (rust) rustTools;
         };
+        conversation = import ./conversation.nix {
+          inherit pkgs system;
+          inherit (rust) rustTools cargoHook;
+        };
 
         # ── Base tools ───────────────────────────────────────────────────────
         baseTools = [
@@ -133,6 +137,7 @@
         lib.beam = beam;
         lib.rust = rust;
         lib.nif  = nif;
+        lib.conversation = conversation;
 
         devShells = {
           # Minimal: git, just, jq, dhall.
@@ -175,6 +180,12 @@
           elixir-nif = pkgs.mkShell {
             buildInputs = baseTools ++ beam.elixirTools ++ nif.nifTools;
             shellHook   = baseShellHook + beam.elixirHook + nif.nifHook;
+          };
+
+          # Conversation: .conv package development.
+          conversation = pkgs.mkShell {
+            buildInputs = baseTools ++ conversation.conversationTools;
+            shellHook   = baseShellHook + conversation.conversationHook;
           };
         };
 

@@ -11,6 +11,8 @@
 
 let
   # ── Packages ───────────────────────────────────────────────────────────────
+  rustSrc = pkgs.rustPlatform.rustLibSrc;
+
   rustTools = [
     pkgs.rustc
     pkgs.cargo
@@ -27,9 +29,11 @@ let
   # Isolate cargo state per project.
   cargoHook = ''
     export CARGO_HOME=$PWD/.nix-cargo
+    export CARGO_TARGET_DIR=''${CARGO_TARGET_DIR:-$HOME/.cargo-target}
     export PATH=$CARGO_HOME/bin:$PATH
     export LLVM_COV=${pkgs.llvmPackages.llvm}/bin/llvm-cov
     export LLVM_PROFDATA=${pkgs.llvmPackages.llvm}/bin/llvm-profdata
+    export RUST_SRC_PATH=${rustSrc}
   '';
 
 in {

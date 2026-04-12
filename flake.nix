@@ -47,6 +47,7 @@
         # copies to /opt/body, and restarts via systemd.
         #
         # Usage: nix run .#deploy-body [-- --strategy hot|cold]
+        # Set BODY_DIR to override the default body source path.
         # Called by OBC pipeline's BEAM.Reload cascade.
         deploy-body = pkgs.writeShellApplication {
           name = "deploy-body";
@@ -89,9 +90,10 @@
 
             # ── Build ────────────────────────────────────────────────────
             echo "Building body release on VM..."
-            $SSH "reed@$VM_IP" bash -l << 'BUILD'
+            BODY_DIR="''${BODY_DIR:-/Users/alexwolf/dev/projects/body}"
+            $SSH "reed@$VM_IP" BODY_DIR="$BODY_DIR" bash -l << 'BUILD'
               set -euo pipefail
-              cd /Users/alexwolf/dev/projects/body
+              cd "$BODY_DIR"
 
               export MIX_ENV=prod
               export MIX_BUILD_ROOT=$PWD/_build-aarch64-linux

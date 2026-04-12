@@ -64,7 +64,7 @@ let
   # Glue bus connect: locates glue binary, connects to bus, exports helpers.
   # Soft-warns if daemon unreachable — safe for CI and offline contexts.
   glueConnect = ''
-    export GLUE_NODE="''${GLUE_NODE:-glue@Alexs-MacBook-Pro}"
+    export GLUE_NODE="''${GLUE_NODE:-glue@localhost}"
     if [ -f "''${HOME}/.local/libexec/glue/bin/glue" ]; then
       export GLUE_BIN="''${HOME}/.local/libexec/glue/bin/glue"
       export GLUE_COOKIE="$(cat ''${HOME}/.local/libexec/glue/releases/COOKIE 2>/dev/null || echo glue_local)"

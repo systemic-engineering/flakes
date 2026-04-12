@@ -27,6 +27,9 @@
           inherit pkgs system;
           inherit (rust) rustTools cargoHook;
         };
+        crate = import ./crate.nix {
+          inherit pkgs rust;
+        };
 
         # ── Base tools ───────────────────────────────────────────────────────
         baseTools = [
@@ -140,6 +143,7 @@
         lib.rust = rust;
         lib.nif  = nif;
         lib.conversation = conversation;
+        lib.crate = crate;
 
         devShells = {
           # Minimal: git, just, jq, dhall.

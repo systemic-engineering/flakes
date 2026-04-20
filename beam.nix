@@ -40,6 +40,9 @@ let
       if ! git rev-parse --is-inside-work-tree &>/dev/null; then
         return 0
       fi
+      if [ -n "$(git rev-parse --show-superproject-working-tree 2>/dev/null)" ]; then
+        return 0
+      fi
       _wt_main=$(git worktree list 2>/dev/null | head -1 | awk '{print $1}')
       _wt_real=$(pwd -P 2>/dev/null)
       _wt_main_real=$(cd "''${_wt_main}" 2>/dev/null && pwd -P)

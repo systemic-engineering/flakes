@@ -4,19 +4,27 @@
   inputs = {
     nixpkgs.url     = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils, rust-overlay }:
     {
       # System-independent outputs
       nixosModules.actor = import ./actor.nix;
     } //
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
+        overlays = [ (import rust-overlay) ];
+        pkgs = import nixpkgs {
+          inherit system overlays;
+        };
         beam = import ./beam.nix { inherit pkgs system; };
         rust = import ./rust.nix {
           inherit pkgs system;
+          rustOverlay = pkgs;
           inherit (beam) worktreeGuard glueConnect;
         };
         nif = import ./nif.nix {

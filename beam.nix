@@ -52,10 +52,19 @@ let
           echo "worktree guard: detached HEAD — agents must be on a named branch"
           return 1
         fi
-        if [ "''${_wt_branch}" = "main" ] || [ "''${_wt_branch}" = "master" ]; then
-          echo "worktree guard: agents must use a feature branch, not ''${_wt_branch}"
-          return 1
-        fi
+        # Retired 2026-09-02 per Alex verbatim: "no need for feature branches.
+        # We're the maintainers. Let's get stuff to main and pushed." The old
+        # discipline (agents must feature-branch; main reserved for review)
+        # is superseded by the maintainer-directive. Detached-HEAD check
+        # above stays — that's a real failure mode independent of the
+        # feature-branch policy.
+        #
+        # Was:
+        #   if [ "''${_wt_branch}" = "main" ] || [ "''${_wt_branch}" = "master" ]; then
+        #     echo "worktree guard: agents must use a feature branch, not ''${_wt_branch}"
+        #     return 1
+        #   fi
+        :
         export AGENT_BRANCH="''${_wt_branch}"
         export GLUE_SESSION="''${GLUE_SESSION:-''${_wt_branch}}"
       fi

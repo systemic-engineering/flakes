@@ -16,7 +16,13 @@
 #   3. CARGO_TARGET_DIR defaults to per-user location but can be overridden
 #      by the user's cargo config.toml (which it already is).
 
-{ pkgs, system, rustOverlay ? null, worktreeGuard ? "", glueConnect ? "" }:
+#   4. A consumer that pins its own toolchain passes it as `toolchain`
+#      (through lib.mkRust). Then that toolchain is the only one: rustTools,
+#      RUST_SRC_PATH and the hook all point at it. Otherwise the shell would
+#      carry two compilers and the one the shell tests isn't the one that
+#      ships (nix-button, 2026-10-31).
+
+{ pkgs, system, rustOverlay ? null, toolchain ? null, worktreeGuard ? "", glueConnect ? "" }:
 
 let
   # ── Toolchain ───────────────────────────────────────────────────────────────
@@ -30,9 +36,10 @@ let
 
   # When rust-overlay is available, use it for the pinned toolchain.
   # Otherwise fall back to nixpkgs (less stable but still functional).
-  hasOverlay = rustOverlay != null;
+  hasOverlay = toolchain != null || rustOverlay != null;
 
-  pinnedToolchain = if hasOverlay then
+  pinnedToolchain = if toolchain != null then toolchain
+  else if rustOverlay != null then
     rustOverlay.rust-bin.stable.${pinnedVersion}.default.override {
       extensions = [ "rust-src" "rust-analyzer" "clippy" "llvm-tools-preview" ];
     }
@@ -51,12 +58,23 @@ let
   else
     pkgs.rustPlatform.rustLibSrc;
 
+  # cargo-llvm-cov 0.9.0 in nixpkgs 58deea65 fails its own test suite on
+  # aarch64-darwin (14 of 20 tests; the instrumented test binaries crash), so
+  # Hydra has no build of it and a local one dies in checkPhase. Same
+  # override as prism and mirror; coverage stays gated on measured numbers in
+  # each consumer. Only 0.9.0, so consumers following an older nixpkgs keep
+  # the cached build. Drop it once nixpkgs builds the tool.
+  cargoLlvmCov =
+    if pkgs.cargo-llvm-cov.version == "0.9.0"
+    then pkgs.cargo-llvm-cov.overrideAttrs (_: { doCheck = false; })
+    else pkgs.cargo-llvm-cov;
+
   # When using rust-overlay, the single derivation provides all tools.
   # When using nixpkgs, we list them individually.
   rustTools = if hasOverlay then [
     pinnedToolchain
     pkgs.pkg-config
-    pkgs.cargo-llvm-cov
+    cargoLlvmCov
     pkgs.llvmPackages.llvm
   ] else [
     pkgs.rustc
@@ -65,7 +83,7 @@ let
     pkgs.rustfmt
     pkgs.rust-analyzer
     pkgs.pkg-config
-    pkgs.cargo-llvm-cov
+    cargoLlvmCov
     pkgs.llvmPackages.llvm
   ];
 
@@ -82,7 +100,7 @@ let
   '';
 
 in {
-  inherit rustTools cargoHook pinnedVersion;
+  inherit rustTools rustSrc cargoHook pinnedVersion;
 
   # Rust project: cargo isolation + worktree guard + glue
   rustHook = cargoHook + worktreeGuard + glueConnect;

@@ -16,18 +16,22 @@
       # System-independent outputs
       nixosModules.actor = import ./actor.nix;
     } //
-    flake-utils.lib.eachDefaultSystem (system:
+    # nixpkgs dropped x86_64-darwin (26.11), so evaluating it throws.
+    flake-utils.lib.eachSystem [ "aarch64-darwin" "aarch64-linux" "x86_64-linux" ] (system:
       let
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs {
           inherit system overlays;
         };
         beam = import ./beam.nix { inherit pkgs system; };
-        rust = import ./rust.nix {
+        # mkRust { toolchain = <the consumer's pinned toolchain>; } gives the
+        # same shell pieces with that toolchain and no other.
+        mkRust = args: import ./rust.nix ({
           inherit pkgs system;
           rustOverlay = pkgs;
           inherit (beam) worktreeGuard glueConnect;
-        };
+        } // args);
+        rust = mkRust { };
         nif = import ./nif.nix {
           inherit pkgs system;
           inherit (rust) rustTools;
@@ -150,6 +154,7 @@
         # Export beam.nix and rust.nix for consumption by project flakes
         lib.beam = beam;
         lib.rust = rust;
+        lib.mkRust = mkRust;
         lib.nif  = nif;
         lib.conversation = conversation;
         lib.crate = crate;

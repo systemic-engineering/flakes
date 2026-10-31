@@ -2,7 +2,8 @@
   description = "Shared flake infrastructure for systemic-engineering projects";
 
   inputs = {
-    nixpkgs.url     = "github:NixOS/nixpkgs/nixos-unstable";
+    # The household rev: what ~/.os runs (nix-button, 2026-10-31).
+    nixpkgs.url     = "github:NixOS/nixpkgs/58deea654ec5dd0644f31c840a07c29fa0592528";
     flake-utils.url = "github:numtide/flake-utils";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
@@ -152,6 +153,33 @@
         lib.nif  = nif;
         lib.conversation = conversation;
         lib.crate = crate;
+
+        checks = {
+          # The shared rust shell builds, cargo-llvm-cov included.
+          rust-shell = self.devShells.${system}.rust;
+
+          # A consumer that brings its own toolchain gets that toolchain and no
+          # other: rustTools, RUST_SRC_PATH and the hook all point at it. A
+          # different release than the pin, so a leak of the pin shows. Compared
+          # by store path at eval time, so nothing is built.
+          mk-rust-one-toolchain =
+            let
+              lib = pkgs.lib;
+              path = d: builtins.unsafeDiscardStringContext (toString d);
+              own = pkgs.rust-bin.stable."1.93.0".default;
+              r = self.lib.${system}.mkRust { toolchain = own; };
+              rustDefaults = builtins.filter
+                (d: lib.hasPrefix "rust-default" (d.name or "")) r.rustTools;
+              srcOk = lib.hasPrefix (path own) (path r.rustSrc);
+              toolsOk = map path rustDefaults == [ (path own) ];
+              hookOk = lib.hasInfix "RUST_SRC_PATH=${path own}"
+                (builtins.unsafeDiscardStringContext r.cargoHook);
+            in
+            assert lib.assertMsg srcOk "mkRust: RUST_SRC_PATH is not the consumer's toolchain";
+            assert lib.assertMsg toolsOk "mkRust: rustTools carry a toolchain the consumer didn't pass";
+            assert lib.assertMsg hookOk "mkRust: cargoHook exports another toolchain's RUST_SRC_PATH";
+            pkgs.runCommand "mk-rust-one-toolchain" { } "touch $out";
+        };
 
         devShells = {
           # Minimal: git, just, jq, dhall.
